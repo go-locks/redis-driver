@@ -13,6 +13,7 @@ import (
 var mode = alone.New(
 	alone.Addr("192.168.0.110:6379"),
 )
+var expiry = time.Second
 var redriver = New(redigo.New(mode))
 
 func TestRedisDriver_Lock(t *testing.T) {
@@ -24,7 +25,7 @@ func TestRedisDriver_Lock(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		waitGroup.Add(1)
 		go func() {
-			ok, _ := redriver.Lock(name, value, time.Second)
+			ok, _ := redriver.Lock(name, value, expiry)
 			if ok {
 				atomic.AddInt32(&counter, 1)
 			}
@@ -38,9 +39,9 @@ func TestRedisDriver_Lock(t *testing.T) {
 
 	/* test for only assign the same value can unlock the mutex */
 	redriver.Unlock(name, other)
-	ok1, _ := redriver.Lock(name, value, time.Second)
+	ok1, _ := redriver.Lock(name, value, expiry)
 	redriver.Unlock(name, value)
-	ok2, _ := redriver.Lock(name, value, time.Second)
+	ok2, _ := redriver.Lock(name, value, expiry)
 	if ok1 || !ok2 {
 		t.Errorf("unexpected result, expect = [false,true] but = [%#v,%#v]", ok1, ok2)
 	}
@@ -49,7 +50,7 @@ func TestRedisDriver_Lock(t *testing.T) {
 	commonWatchAndNotifyTest(
 		name,
 		func() bool {
-			ok, _ := redriver.Lock(name, value, time.Second)
+			ok, _ := redriver.Lock(name, value, expiry)
 			return ok
 		},
 		func() {
@@ -60,10 +61,10 @@ func TestRedisDriver_Lock(t *testing.T) {
 
 func TestRedisDriver_Touch(t *testing.T) {
 	var name, value, other = "test.touch.name{a}", "test.touch.value", "test.touch.value.other"
-	ok1 := redriver.Touch(name, value, time.Second)
-	redriver.Lock(name, value, time.Second)
-	ok2 := redriver.Touch(name, value, time.Second)
-	ok3 := redriver.Touch(name, other, time.Second)
+	ok1 := redriver.Touch(name, value, expiry)
+	redriver.Lock(name, value, expiry)
+	ok2 := redriver.Touch(name, value, expiry)
+	ok3 := redriver.Touch(name, other, expiry)
 	if ok1 || !ok2 || ok3 {
 		t.Errorf("unexpected result, expect = [false,true,false] but = [%#v,%#v,%#v]", ok1, ok2, ok3)
 	}
@@ -78,7 +79,7 @@ func TestRedisDriver_RLock(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		waitGroup.Add(1)
 		go func() {
-			ok, _ := redriver.RLock(name, value, time.Second)
+			ok, _ := redriver.RLock(name, value, expiry)
 			if ok {
 				atomic.AddInt32(&counter, 1)
 			}
@@ -92,8 +93,8 @@ func TestRedisDriver_RLock(t *testing.T) {
 
 	/* test for write is mutually exclusive with read,
 	 * no read lock can enter in after write lock if even it is failed */
-	ok1, _ := redriver.WLock(name, value, time.Second)
-	ok2, _ := redriver.RLock(name, value, time.Second)
+	ok1, _ := redriver.WLock(name, value, expiry)
+	ok2, _ := redriver.RLock(name, value, expiry)
 	if ok1 || ok2 {
 		t.Errorf("unexpected result, expect = [false,false], but = [%#v,%#v]", ok1, ok2)
 	}
@@ -103,14 +104,14 @@ func TestRedisDriver_RLock(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		redriver.RUnlock(name, other)
 	}
-	ok3, _ := redriver.WLock(name, value, time.Second)
+	ok3, _ := redriver.WLock(name, value, expiry)
 	for i := 0; i < 10; i++ {
 		redriver.RUnlock(name, value)
 	}
-	ok4, _ := redriver.RLock(name, value, time.Second)
-	ok5, _ := redriver.WLock(name, value, time.Second)
+	ok4, _ := redriver.RLock(name, value, expiry)
+	ok5, _ := redriver.WLock(name, value, expiry)
 	redriver.WUnlock(name, value)
-	ok6, _ := redriver.RLock(name, value, time.Second)
+	ok6, _ := redriver.RLock(name, value, expiry)
 	if ok3 || ok4 || !ok5 || !ok6 {
 		t.Errorf("unexpected result, expect = [false,false,true,true], but = [%#v,%#v,%#v,%#v]", ok3, ok4, ok5, ok6)
 	}
@@ -119,7 +120,7 @@ func TestRedisDriver_RLock(t *testing.T) {
 	commonWatchAndNotifyTest(
 		name,
 		func() bool {
-			ok, _ := redriver.RLock(name, value, time.Second)
+			ok, _ := redriver.RLock(name, value, expiry)
 			return ok
 		},
 		func() {
@@ -137,7 +138,7 @@ func TestRedisDriver_WLock(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		waitGroup.Add(1)
 		go func() {
-			ok, _ := redriver.WLock(name, value, time.Second)
+			ok, _ := redriver.WLock(name, value, expiry)
 			if ok {
 				atomic.AddInt32(&counter, 1)
 			}
@@ -151,11 +152,11 @@ func TestRedisDriver_WLock(t *testing.T) {
 
 	/* test for read is mutually exclusive with write,
 	 * only assign the same value can unlock the mutex */
-	ok1, _ := redriver.RLock(name, value, time.Second)
+	ok1, _ := redriver.RLock(name, value, expiry)
 	redriver.WUnlock(name, other)
-	ok2, _ := redriver.RLock(name, value, time.Second)
+	ok2, _ := redriver.RLock(name, value, expiry)
 	redriver.WUnlock(name, value)
-	ok3, _ := redriver.RLock(name, value, time.Second)
+	ok3, _ := redriver.RLock(name, value, expiry)
 	if ok1 || ok2 || !ok3 {
 		t.Errorf("unexpected result, expect = [false,false,true], but = [%#v,%#v,%#v]", ok1, ok2, ok3)
 	}
@@ -164,7 +165,7 @@ func TestRedisDriver_WLock(t *testing.T) {
 	commonWatchAndNotifyTest(
 		name,
 		func() bool {
-			ok, _ := redriver.WLock(name, value, time.Second)
+			ok, _ := redriver.WLock(name, value, expiry)
 			return ok
 		},
 		func() {

@@ -41,10 +41,10 @@ var mode1 = alone.New(
 	alone.Addr("192.168.0.110:6379"),
 )
 var mode2 = alone.New(
-	alone.Addr("192.168.0.110:6379"),
+	alone.Addr("192.168.0.111:6379"),
 )
 var mode3 = alone.New(
-	alone.Addr("192.168.0.110:6379"),
+	alone.Addr("192.168.0.112:6379"),
 )
 var redriver = New(redigo.New(mode1), redigo.New(mode2), redigo.New(mode3))
 ```

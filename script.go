@@ -35,7 +35,7 @@ var (
 	`)
 
 	// KEYS = [name]
-	// ARGV = [value, expiry, maxReaders]
+	// ARGV = [value, expiry]
 	readLockScript = redis.NewScript(1, `
 		local count = tonumber(redis.call("HGET", KEYS[1], "count"))
 		if (count ~= nil) and (count < 0) then

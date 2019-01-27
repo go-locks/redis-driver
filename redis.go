@@ -131,7 +131,7 @@ func (rd *redisDriver) RLock(name, value string, expiry time.Duration) (bool, ti
 			if rd.cluster {
 				redisc.BindConn(c, name)
 			}
-			return readLockScript.Do(c, name, value, msExpiry, MaxReaders)
+			return readLockScript.Do(c, name, value, msExpiry)
 		})
 		if err != nil || wait == -1 {
 			logrus.WithError(err).Errorf("redis acquire read lock '%s' failed", name)

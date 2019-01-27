@@ -10,7 +10,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const maxReaders = 1 << 30
+var (
+	MaxReaders            = 1 << 30
+	MinWatchRetryInterval = time.Millisecond
+	MaxWatchRetryInterval = time.Second * 16
+)
 
 type redisDriver struct {
 	quorum  int
@@ -90,11 +94,11 @@ func (rd *redisDriver) Lock(name, value string, expiry time.Duration) (bool, tim
 }
 
 func (rd *redisDriver) Unlock(name, value string) {
+	channel := rd.channelName(name)
 	for _, rg := range rd.redigo {
 		_, err := rg.Exec(func(c redis.Conn) (res interface{}, err error) {
-			channel := rd.channelName(name)
 			if rd.cluster {
-				redisc.BindConn(c, name)
+				redisc.BindConn(c, name, channel)
 			}
 			return unlockScript.Do(c, name, channel, value)
 		})
@@ -127,7 +131,7 @@ func (rd *redisDriver) RLock(name, value string, expiry time.Duration) (bool, ti
 			if rd.cluster {
 				redisc.BindConn(c, name)
 			}
-			return readLockScript.Do(c, name, value, msExpiry, maxReaders)
+			return readLockScript.Do(c, name, value, msExpiry, MaxReaders)
 		})
 		if err != nil || wait == -1 {
 			logrus.WithError(err).Errorf("redis acquire read lock '%s' failed", name)
@@ -137,13 +141,13 @@ func (rd *redisDriver) RLock(name, value string, expiry time.Duration) (bool, ti
 }
 
 func (rd *redisDriver) RUnlock(name, value string) {
+	channel := rd.channelName(name)
 	for _, rg := range rd.redigo {
 		_, err := rg.Exec(func(c redis.Conn) (res interface{}, err error) {
-			channel := rd.channelName(name)
 			if rd.cluster {
 				redisc.BindConn(c, name, channel)
 			}
-			return readUnlockScript.Do(c, name, channel, value, maxReaders)
+			return readUnlockScript.Do(c, name, channel, value, MaxReaders)
 		})
 		if err != nil {
 			logrus.WithError(err).Errorf("redis release read lock '%s' failed", name)
@@ -174,7 +178,7 @@ func (rd *redisDriver) WLock(name, value string, expiry time.Duration) (bool, ti
 			if rd.cluster {
 				redisc.BindConn(c, name)
 			}
-			return writeLockScript.Do(c, name, value, msExpiry, maxReaders)
+			return writeLockScript.Do(c, name, value, msExpiry, MaxReaders)
 		})
 		if err != nil || wait == -1 {
 			logrus.WithError(err).Errorf("redis acquire write lock '%s' failed", name)
@@ -184,13 +188,13 @@ func (rd *redisDriver) WLock(name, value string, expiry time.Duration) (bool, ti
 }
 
 func (rd *redisDriver) WUnlock(name, value string) {
+	channel := rd.channelName(name)
 	for _, rg := range rd.redigo {
 		_, err := rg.Exec(func(c redis.Conn) (res interface{}, err error) {
-			channel := rd.channelName(name)
 			if rd.cluster {
 				redisc.BindConn(c, name, channel)
 			}
-			return writeUnlockScript.Do(c, name, channel, value, maxReaders)
+			return writeUnlockScript.Do(c, name, channel, value, MaxReaders)
 		})
 		if err != nil {
 			logrus.WithError(err).Errorf("redis release write lock '%s' failed", name)
@@ -207,14 +211,20 @@ func (rd *redisDriver) Watch(name string) <-chan struct{} {
 	outChan := make(chan struct{})
 	for _, rg := range rd.redigo {
 		go func() {
+			errSleepDuration := MinWatchRetryInterval
 			for {
-				err := rg.Sub(func(c redis.PubSubConn) (err error) {
+				err := rg.Sub(func(c redis.PubSubConn) error {
 					if rd.cluster {
-						redisc.BindConn(c.Conn, channel)
+						err := redisc.BindConn(c.Conn, channel)
+						if err != nil {
+							return err
+						}
 					}
-					if err := c.Subscribe(channel); err != nil {
+					err := c.Subscribe(channel)
+					if err != nil {
 						return err
 					}
+					errSleepDuration = MinWatchRetryInterval
 					for {
 						switch v := c.ReceiveWithTimeout(0).(type) {
 						case redis.Message:
@@ -226,6 +236,10 @@ func (rd *redisDriver) Watch(name string) <-chan struct{} {
 				})
 				if err != nil {
 					logrus.WithError(err).Errorf("redis watch channel '%s' abort", channel)
+					time.Sleep(errSleepDuration) // may be the redis server is down
+					if errSleepDuration *= 2; errSleepDuration > MaxWatchRetryInterval {
+						errSleepDuration = MaxWatchRetryInterval
+					}
 				}
 			}
 		}()

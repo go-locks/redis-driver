@@ -63,6 +63,8 @@ func (rd *redisDriver) doLock(fn func(rg *redigo.Redigo) int) (bool, time.Durati
 	var w time.Duration
 	if minWait > 0 {
 		w = time.Duration(minWait) * time.Millisecond
+	} else {
+		w = time.Duration(minWait) // less than zero, use the default wait duration
 	}
 	return counter >= rd.quorum, w
 }
@@ -87,6 +89,7 @@ func (rd *redisDriver) Lock(name, value string, expiry time.Duration) (bool, tim
 			return lockScript.Do(c, name, value, msExpiry)
 		})
 		if err != nil || wait == -1 {
+			wait = -1 // less than zero, use the default wait duration
 			logrus.WithError(err).Errorf("redis acquire lock '%s' failed", name)
 		}
 		return wait
@@ -134,6 +137,7 @@ func (rd *redisDriver) RLock(name, value string, expiry time.Duration) (bool, ti
 			return readLockScript.Do(c, name, value, msExpiry)
 		})
 		if err != nil || wait == -1 {
+			wait = -1 // less than zero, use the default wait duration
 			logrus.WithError(err).Errorf("redis acquire read lock '%s' failed", name)
 		}
 		return wait
@@ -181,6 +185,7 @@ func (rd *redisDriver) WLock(name, value string, expiry time.Duration) (bool, ti
 			return writeLockScript.Do(c, name, value, msExpiry, MaxReaders)
 		})
 		if err != nil || wait == -1 {
+			wait = -1 // less than zero, use the default wait duration
 			logrus.WithError(err).Errorf("redis acquire write lock '%s' failed", name)
 		}
 		return wait

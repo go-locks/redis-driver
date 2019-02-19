@@ -30,6 +30,10 @@
   branch = "master"
 
 [[constraint]]
+  name = "github.com/go-locks/testcase"
+  branch = "master"
+
+[[constraint]]
   name = "github.com/letsfire/redigo"
   branch = "master"
 

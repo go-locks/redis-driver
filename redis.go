@@ -52,31 +52,36 @@ func (rd *redisDriver) channelName(name string) string {
 }
 
 func (rd *redisDriver) doLock(fn func(rg *redigo.Redigo) int) (bool, time.Duration) {
-	counter, minWait := 0, -1
+	counter := rd.quorum
 	for _, rg := range rd.redigo {
-		if wait := fn(rg); wait == -3 {
-			counter++
-		} else if minWait > wait || minWait == -1 {
-			minWait = wait
+		for {
+			if wait := fn(rg); wait == 0 {
+				continue
+			} else if wait == -3 {
+				counter -= 1
+				if counter == 0 {
+					return true, 0
+				}
+			} else if wait > 0 {
+				return false, time.Duration(wait) * time.Millisecond
+			}
+			break
 		}
 	}
-	var w time.Duration
-	if minWait > 0 {
-		w = time.Duration(minWait) * time.Millisecond
-	} else {
-		w = time.Duration(minWait) // less than zero, use the default wait duration
-	}
-	return counter >= rd.quorum, w
+	return false, -1
 }
 
 func (rd *redisDriver) doTouch(fn func(rg *redigo.Redigo) bool) bool {
-	var counter int
+	counter := rd.quorum
 	for _, rg := range rd.redigo {
 		if fn(rg) {
-			counter++
+			counter -= 1
+			if counter == 0 {
+				return true
+			}
 		}
 	}
-	return counter >= rd.quorum
+	return false
 }
 
 func (rd *redisDriver) Lock(name, value string, expiry time.Duration) (bool, time.Duration) {
@@ -215,7 +220,7 @@ func (rd *redisDriver) Watch(name string) <-chan struct{} {
 	channel := rd.channelName(name)
 	outChan := make(chan struct{})
 	for _, rg := range rd.redigo {
-		go func() {
+		go func(rg *redigo.Redigo) {
 			errSleepDuration := MinWatchRetryInterval
 			for {
 				err := rg.Sub(func(c redis.PubSubConn) error {
@@ -225,8 +230,7 @@ func (rd *redisDriver) Watch(name string) <-chan struct{} {
 							return err
 						}
 					}
-					err := c.Subscribe(channel)
-					if err != nil {
+					if err := c.Subscribe(channel); err != nil {
 						return err
 					}
 					errSleepDuration = MinWatchRetryInterval
@@ -247,7 +251,7 @@ func (rd *redisDriver) Watch(name string) <-chan struct{} {
 					}
 				}
 			}
-		}()
+		}(rg)
 	}
 	return outChan
 }

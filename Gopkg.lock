@@ -2,20 +2,20 @@
 
 
 [[projects]]
-  digest = "1:8e379117c74df8f21127a82e1599de345efad7770fa91dd2ea20195471014fb4"
-  name = "github.com/FZambia/sentinel"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "e69a8dc549bb0aabdc63fbfd9e8bfe971a368153"
-  version = "v1.0.0"
-
-[[projects]]
   branch = "master"
   digest = "1:b977b0cac9d3116020cc9806dfefcea558b716808d8db5bcd091a4961cecada6"
   name = "github.com/go-locks/distlock"
   packages = ["driver"]
   pruneopts = "UT"
   revision = "78f0299e15274c7dbd8bbf1903221cdf9511a39d"
+
+[[projects]]
+  branch = "master"
+  digest = "1:0fc30ee071fb2ab89a1028c42bca32e097cbfbbee8c9c99963b1ad925aa75123"
+  name = "github.com/go-locks/testcase"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "ce6ad9c540beaed10367a35e9d947f494b073aeb"
 
 [[projects]]
   digest = "1:38ec74012390146c45af1f92d46e5382b50531247929ff3a685d2b2be65155ac"
@@ -30,13 +30,12 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:ab43850c0ac70d8c59814f81595919674fc2d5b9ebb329afa2fa4d162bbf3470"
+  digest = "1:3cbd87d29de9fd226704969dd48cd44a71592432c50758f934bbe0e3bfccc1de"
   name = "github.com/letsfire/redigo"
   packages = [
     ".",
     "mode",
     "mode/alone",
-    "mode/sentinel",
   ]
   pruneopts = "UT"
   revision = "fae85541064675f2776ed0675fedb854727184ce"
@@ -62,10 +61,10 @@
   analyzer-version = 1
   input-imports = [
     "github.com/go-locks/distlock/driver",
+    "github.com/go-locks/testcase",
     "github.com/gomodule/redigo/redis",
     "github.com/letsfire/redigo",
     "github.com/letsfire/redigo/mode/alone",
-    "github.com/letsfire/redigo/mode/sentinel",
     "github.com/letsfire/redisc",
     "github.com/sirupsen/logrus",
   ]
